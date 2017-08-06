@@ -1,0 +1,47 @@
+Data Extract notes:
+
+zip file contained:
+- patient table: One row per patient, includes basic demographics
+- variable table: one record for each i2b2 concept requested (?)
+- data table: long format results-like table, which includes conditions, notes, etc.
+- code info table: information about the codes requested from HERON (?)
+
+
+Deeper dive:
+PATIENT TABLE:
+- vital status = dead/not dead (n= alive, y= dead)
+- last visit: date of last known encounter from any source
+
+
+VARIABLE TABLE:
+- gives more specific information about the concepts you requested
+- name: the concept I included in the i2b2 search
+- counts: number of counts of that concept in my search
+- path: path to concept in epic. Also useful for categorizing concept (demographics, etc)
+- tooltip: often contains the concept (demographics), but not always.
+
+DATA TABLE:
+- in Entry/Attribute/Value format (aka tidy)
+- raw data sets include all attributes between entity (patient) and the variable. no constraints on dates.
+- also appears to contain a lot of duplicates
+- variables:
+- variable: name of query type that this fact matched (ex. gender)
+- valtype: n = number, c = code, t = text, d = date
+- nval = value of observation when valtype = n
+- units: corresponds to nval
+- code: internal i2b2/HERON code for the value (i.e. DEM|RACE|black)
+-modifer: used to distinguish between source of diagnosis (clinical vs billing)
+- start_date: the start date for the observation, likely also the start date for the diagnosis (?, test)
+- end_date: end date for the observation (end of medication)
+
+
+
+CODE INFO TABLE
+-Helpful place to search for more descriptive information about the concept being searched.
+-ex. variable for vitals may indicate "regular", but not sure if this is hr, bp, o2, etc. Code info table under 'tooltip' column will indicate more info, like heart rythm, and thus, we can interpret Heart Rythym was normal.
+- not quite sure yet how to scale this shit...
+- Variable_index: index of variable inside the VARIABLE TABLE
+- The remainder are basically code mappings...
+
+
+
