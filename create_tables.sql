@@ -165,21 +165,31 @@ order by patient_num, encounter_num, start_date
 ------------------
 -- Notes table  --
 ------------------
+-- There appear to be many notes that aren't associated with the encouter_nums
+-- from a person's concussion visits. I'll need to innerjoin all notes found
+-- with the encounter_nums from concussion_dx;
+
 DROP TABLE IF EXISTS text_notes;
 
 CREATE TABLE text_notes as 
-SELECT DISTINCT *
+SELECT DISTINCT * 
 FROM (
-        SELECT patient_num
-            ,encounter_num
-            ,start_date
-            ,code_label
-            ,variable
-            ,variable_index
-            ,tval
-        FROM master_long
-        WHERE valtype = 'T'
-        AND code_label IN ('Ambulatory Procedure Notes (17)', 'Ambulatory Progress                          Notes (15)', 'Care Plan (600008)', 'Discharge Summaries                         (5)', 'ED Notes (6)', 'Progress Notes (1)')
-        order by patient_num, encounter_num, start_date
-) AS tmp
+        SELECT x.patient_num
+            ,x.encounter_num
+            ,x.start_date
+            ,x.code_label
+            ,x.variable
+            ,x.variable_index
+            ,x.tval
+        FROM master_long as x
+        INNER JOIN concussion_dx as y
+        ON x.patient_num = y.patient_num 
+        AND x.encounter_num = y.encounter_num
+        WHERE x.valtype = 'T'
+        AND x.code_label IN ('Ambulatory Procedure Notes (17)', 'Ambulatory                       Progress Notes (15)', 'Care Plan (600008)',                             'Discharge Summaries (5)', 'ED Notes (6)',                              'Progress Notes (1)')
+        AND x.variable_index != 265
+        AND x.tval IS NOT NULL
+        AND x.tval != '  '
+        order by x.patient_num, x.encounter_num, x.start_date
+)as tmp
 ;
