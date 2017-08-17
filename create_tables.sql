@@ -5,7 +5,7 @@
 --      -Encounter (concussion only) --DONE (basically is concussion table)
 --      -Results (concussion only) --DONE
 --      -Demographics --DONE (But subset from concussion_dx patient_nums)
---      -Text notes
+--      -Text notes --DONE
 --      -Procedures (pt/ot/st,etc)
 
 -- Rename 'data' table to change variable types to dates/integer
@@ -193,3 +193,25 @@ FROM (
         order by x.patient_num, x.encounter_num, x.start_date
 )as tmp
 ;
+
+----------------------
+-- Procedures table --
+----------------------
+DROP TABLE IF EXISTS procedures
+CREATE TABLE procedures as
+SELECT DISTINCT * 
+FROM (
+        SELECT patient_num
+                ,encounter_num
+                ,start_date                
+                ,code
+                ,variable
+                ,variable_index
+                ,code_label
+        FROM master_long
+        where code LIKE '%CPT%'
+        order by patient_num, encounter_num, start_date
+) as tmp
+;
+
+
