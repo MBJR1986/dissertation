@@ -1,44 +1,41 @@
 # Dissertation Code
 #Data Processing Script for Logistic Regression model
 
+#Data from HERON has already been structured for processing with
+#create_tables.sql script.
+
+#This script creates or converts data into variables for regression analysis.
+
 #load packages
+library(lubridate)
 library(sqldf)
 
 #load data
 setwd("/Users/Rachel/Documents/mark/dissertation/data/Mark_dissertation_20170718/")
-master <- read.csv('Mark_dissertation_20170718-data.csv', stringsAsFactors = FALSE)
+master <- read.csv('master.csv', stringsAsFactors = FALSE)
+concussion_dx <- read.csv('concussion_dx_cohort.csv', stringsAsFactors = FALSE)
+demo <- read.csv('Mark_dissertation_20170718-patient.csv', stringsAsFactors = FALSE)
+enc_loc <- read.csv('encounter_location.csv', stringsAsFactors = FALSE)
+med_hx <- read.csv('medical_history.csv', stringsAsFactors = FALSE)
+results <- read.csv('results.csv', stringsAsFactors = FALSE)
+notes <- read.csv('text_notes.csv', stringsAsFactors = FALSE)
 
-#start separating master out into different tables
-#TODO: Person (demographics), Conditions, notes, results (similar to SJS_v15 structure)
-#   - really need to understand what is in each table I received first...
+#Change Variable types
+#concussion dx table
+concussion_dx$start_date <- mdy_hm(concussion_dx$start_date)
+concussion_dx$patient_num <- as.factor(concussion_dx$patient_num)
+concussion_dx$encounter_num <- as.factor(concussion_dx$encounter_num)
+concussion_dx$variable_index <- as.factor(concussion_dx$variable_index)
+concussion_dx$encounter_loc <- as.factor(concussion_dx$encounter_loc)
+
+#LOR
+#Determine length of a person's recovery, from  the difference between 1st visit and last visit 
+#(assuming last visit = return to normal functioning)
+
+#create variable for eval_dt
+min = aggregate(concussion_dx$start_date,by=list(concussion_dx$patient_num),min)
+max = aggregate(concussion_dx$start_date,by=list(concussion_dx$patient_num),max)
+#TODO make column names same before merging
+concussion_dx = merge(concussion_dx,min,by.x=1,by.y=1)
 
 
-# for logistic regression model, I might just be able to use the person table, as it contains
-#the first and last values, which is all I'm concerned with, right???
-#   - Yeah no, that won't work... but all demographic info is in this table.
-
-###############################
-### Concussion Population   ###
-###############################
-#generate list of patient-ids with a concussion, along with dates and encounter
-pt_list <- unique(sqldf("select patient_num
-                    ,encounter_num
-                    ,start_date
-                    ,variable
-                    ,variable_index
-                    ,modifier_label
-                 from master
-                 where modifier = 'DiagObs:PRIMARY_DX_YN'"))#1626 unique people...
-#adding visit location
-sites <- c("ARW SPORTS MEDICINE CL", "EMERGENCY", "EMH EMERGENCY", "ICC SPECCARE NEURO", "ICC SPN REHAB MED CL",
-           "ICC SPORTS MEDICINE CL", "KUCC OVPK PT", "UKP-FAIRWAY NEUROLOGY", "UKP-KCK FAM MED", "UKP-KCK PED AMB",
-           "UKP-KU FAM MED", "UKP-KU PED AMB", "UKP-KU PED NEUROLOGY", "UKP-KU REHAB MED CL", "UKP-KUMW REHAB MED CL",
-           "UKP-LCOA NEUROLOGY", "UKP-LWR SPORTS MED CL", "ZZ30F REHAB MEDICINE", "ZZARW SPORTS REHAB CL", 
-           "ZZUKP-PV PED URGENT CA")
-
-###########################
-####    CONDITIONS      ###
-###########################
-# Include: PID, EID, modifier label = Primary Dx
-
-#
