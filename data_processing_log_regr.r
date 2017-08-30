@@ -68,8 +68,9 @@ demo$religion <- as.factor(demo$religion)
 #################################################
 log_reg <- as.data.frame(sqldf("select distinct conc.patient_num
                                         ,conc.LOR
-                                        ,med.code_label as historical_condition
+                                        ,demo.age
                                         ,demo.sex
+                                        ,med.code_label as historical_condition
                                         ,demo.language
                                         ,demo.race
                                         ,demo.marital_status
@@ -80,10 +81,17 @@ log_reg <- as.data.frame(sqldf("select distinct conc.patient_num
                                     on conc.patient_num = med.patient_num
                                     left outer join demo 
                                     on conc.patient_num = demo.patient_num
-                                    left outer join enc_loc as enc
+                                    left outer join (
+                                            select patient_num
+                                                ,MIN(start_date)
+                                                ,encounter_loc
+                                            from enc_loc
+                                            group by patient_num) as enc
                                     on conc.patient_num = enc.patient_num
-                                    group by conc.patient_num
                                     order by conc.patient_num"))
-library(ade4) #package converts historical_conditions to binary dummy variables
-hx_cond_dummy <-as.data.frame(model.matrix( ~ historical_condition - 1, data=log_reg_full )) #still need to join back to patient_num
-
+#convert log_reg vars to non-factor/character for dummy creation
+log_reg$patient_num <- as.numeric(log_reg$patient_num)
+log_reg$encounter_loc <- as.factor(log_reg$encounter_loc)
+library(caret) #package converts historical_conditions to binary dummy variables
+dmys <- dummyVars(" ~ .", data = log_reg, fullRank = T) #still need to join back to patient_num
+log_reg_full <- unique(data.frame(predict(dmys, newdata = log_reg))) #still producing multiple rows per person...
