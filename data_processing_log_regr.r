@@ -13,7 +13,7 @@ library(lubridate)
 library(sqldf)
 
 #load data
-setwd("/Users/Rachel/Documents/mark/dissertation/data/Mark_dissertation_20170718/")
+setwd("C:/Users/MB047320/OneDrive - Cerner Corporation/KUMC/Dissertation/data/Mark_dissertation_20170718/")
 master <- read.csv('master.csv', stringsAsFactors = FALSE)
 concussion_dx <- read.csv('concussion_dx_cohort.csv', stringsAsFactors = FALSE)
 demo <- read.csv('Mark_dissertation_20170718-patient.csv', stringsAsFactors = FALSE)
@@ -95,3 +95,9 @@ log_reg$encounter_loc <- as.factor(log_reg$encounter_loc)
 library(caret) #package converts historical_conditions to binary dummy variables
 dmys <- dummyVars(" ~ .", data = log_reg, fullRank = T) #still need to join back to patient_num
 log_reg_full <- unique(data.frame(predict(dmys, newdata = log_reg))) #still producing multiple rows per person...
+
+#combine rows where multiple conditions are present
+library(dplyr)
+log_reg_full <- log_reg_full %>% group_by(patient_num) %>% summarise_all(funs(max))
+
+
