@@ -33,6 +33,9 @@ concussion_dx$encounter_loc <- as.factor(concussion_dx$encounter_loc)
 ###################
 ####    LOR     ###
 ###################
+
+#PRIMARY OUTCOME VARIABLE
+
 #Determine length of a person's recovery, from  the difference between 1st visit and last visit 
 #(assuming last visit = return to normal functioning)
 
@@ -99,5 +102,36 @@ log_reg_full <- unique(data.frame(predict(dmys, newdata = log_reg))) #still prod
 #combine rows where multiple conditions are present
 library(dplyr)
 log_reg_full <- log_reg_full %>% group_by(patient_num) %>% summarise_all(funs(max))
+#log_reg_full now has one row per person.
 
+###################
+###   RESULTS   ###
+###################
 
+# Parse out results by person, type, and value (by person). Ideally, I will need to take the earliest 
+# value per person, to represent the evaluation results...
+
+#First, start by parsing out results into descriptive categorical variable
+results_subset <- sqldf("select log.patient_num
+                        ,res.encounter_num
+                        ,res.start_date
+                        ,res.tval
+                        ,CASE 
+                            WHEN variable_path LIKE '%IMPACT COMPOSITE SCORE%' THEN IMPACT COMPOSITE SCORE
+                            WHEN variable_path LIKE '%CONCUSSION IMPACT IMPULSE CONTRO%' THEN IMPACT IMPULSE CONTROL
+                            WHEN variable_path LIKE '%CONCUSSION IMPACT MEMORY COMPOSI%' THEN IMPACT MEMORY COMPOSITE
+                            WHEN variable_path LIKE '%CONCUSSION IMPACT REACTION TIME%' THEN IMPACT REACTION TIME
+                            WHEN variable_path LIKE '%CONCUSSION IMPACT TOTAL SYMPTOM%' THEN IMPACT TOTAL SYMPTOM
+                            WHEN variable_path LIKE '%CONCUSSION IMPACT VISUAL MOTOR%' THEN IMPACT VISUAL MOTOR WHEN variable_path LIKE '%ROW BALANCE ERRORS STANCE 1%' THEN CONCUSSION SCORE BALANCE ERRORS STANCE1
+                            WHEN variable_path LIKE '%ROW BALANCE ERRORS STANCE 2%' THEN CONCUSSION SCORE BALANCE ERRORS STANCE2
+                            WHEN variable_path LIKE '%ROW BALANCE ERRORS STANCE 3%' THEN CONCUSSION SCORE BALANCE ERRORS STANCE3
+                            WHEN variable_path LIKE '%ROW BALANCE ERRORS TOTAL%' THEN CONCUSSION SCORE TOTAL BALANCE ERRORS
+                            WHEN variable_path LIKE '%ROW CONCENTRATION SCORE%' THEN CONCUSSION SCORE CONCENTRATION TOTAL
+                            WHEN variable_path LIKE '%ROW DELAYED RECALL SCORE%' THEN CONCUSSION SCORE DELAYED RECALL
+                            WHEN variable_path LIKE '%ROW IMMEDIATE MEMORY SCORE%' THEN CONCUSSION SCORE IMMEDIATE MEMORY
+                            WHEN variable_path LIKE '%ROW TOTAL COGNITION SCORE%' THEN CONCUSSION SCORE TOTAL COGNITIONNONE
+                        ELSE 0
+                        END result_test
+                        FROM results as res
+                        INNER JOIN log_reg_full as log
+                        ON reg.patient_num = log.patient_num")
