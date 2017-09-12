@@ -12,6 +12,7 @@
 library(lubridate)
 library(sqldf)
 
+
 #load data
 setwd("C:/Users/MB047320/OneDrive - Cerner Corporation/KUMC/Dissertation/data/Mark_dissertation_20170718/")
 master <- read.csv('master.csv', stringsAsFactors = FALSE)
@@ -174,5 +175,47 @@ results_xpld <- sqldf("select log.patient_num
                         ON res.patient_num = log.patient_num")
  #convert result_test to factor
 results_xpld$result_test<- as.factor(results_xpld$result_test)
+results_xpld$tval <- as.character(results_xpld$tval)
+results_xpld$nval <- as.numeric(results_xpld$nval)
+#reshape result_test column into multiple columns and display result
+res_final <- sqldf("select patient_num
+                  ,encounter_num
+                   ,start_date
+                   ,MAX(CASE WHEN result_test = 'IMPACT_MEMORY_COMPOSITE' THEN tval end) as IMPACT_MEMORY_COMPOSITE
+                   ,MAX(CASE WHEN result_test = 'IMPACT_COMMENT' THEN tval end) as IMPACT_COMMENT
+                   ,MAX(CASE WHEN result_test = 'IMPACT_IMPULSE_CONTROL' THEN tval end) as IMPACT_IMPULSE_CONTROL
+                   ,MAX(CASE WHEN result_test = 'IMPACT_REACTION_TIME' THEN tval end) as IMPACT_REACTION_TIME
+                   ,MAX(CASE WHEN result_test = 'IMPACT_TOTAL_SYMPTOM' THEN tval end) as IMPACT_TOTAL_SYMPTOM
+                   ,MAX(CASE WHEN result_test = 'IMPACT_VISUAL_MOTOR' THEN tval end) as IMPACT_VISUAL_MOTOR
+                   ,MAX(CASE WHEN result_test = 'CONCUSSION_SCORE_TOTAL_BALANCE_ERRORS' THEN nval end) as CONCUSSION_SCORE_TOTAL_BALANCE_ERRORS
+                   ,MAX(CASE WHEN result_test = 'CONCUSSION_SCORE_CONCENTRATION_TOTAL' THEN nval end) as CONCUSSION_SCORE_CONCENTRATION_TOTAL
+                   ,MAX(CASE WHEN result_test = 'CONCUSSION_SCORE_DELAYED_RECALL' THEN nval END) as CONCUSSION_SCORE_DELAYED_RECALL
+                   ,MAX(CASE WHEN result_test = 'CONCUSSION_SCORE_IMMEDIATE_MEMORY' THEN nval end) as CONCUSSION_SCORE_IMMEDIATE_MEMORY
+                   ,MAX(CASE WHEN result_test = 'CONCUSSION_SCORE_TOTAL_COGNITION' THEN nval end) as CONCUSSION_SCORE_TOTAL_COGNITION
+                   ,MAX(CASE WHEN result_test = 'CONCUSSION_SYMPTOMS_TOTAL_NUMBER' THEN nval end) as CONCUSSION_SYMPTOMS_TOTAL_NUMBER
+                   ,MAX(CASE WHEN result_test = 'CONCUSSION_SYMPTOMS_TOTAL_SCORE' THEN nval end) as CONCUSSION_SYMPTOMS_TOTAL_SCORE
+                    FROM results_xpld
+                    group by patient_num
+                   order by patient_num") #have to use max function to populate columns for some reason
 
-summary(results_xpld)
+#test for same # of patients 
+print("Do patient counts match for all results subsets?")
+length(unique(res_final$patient_num)) == length(unique(subset_res$patient_num))
+
+#clean up soon-to-be numerics
+#edited via edit()
+#write out res_final and reload for storage purposes
+#write.csv(res_final, 'results_final_concussion_pop.csv')
+res_final <- read.csv('results_final_concussion_pop.csv')
+
+#convert variables to numeric (ImPACT variables)
+res_final$IMPACT_COMMENT <- as.numeric(res_final$IMPACT_COMMENT)
+res_final$IMPACT_IMPULSE_CONTROL <- as.numeric(res_final$IMPACT_IMPULSE_CONTROL)
+res_final$IMPACT_MEMORY_COMPOSITE <- as.numeric(res_final$IMPACT_MEMORY_COMPOSITE)
+res_final$IMPACT_REACTION_TIME <- as.numeric(res_final$IMPACT_REACTION_TIME)
+res_final$IMPACT_TOTAL_SYMPTOM <- as.numeric(res_final$IMPACT_TOTAL_SYMPTOM)
+res_final$IMPACT_VISUAL_MOTOR <- as.numeric(res_final$IMPACT_VISUAL_MOTOR)
+
+
+#Join res_final back into log_reg_full table
+
