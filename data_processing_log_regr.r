@@ -86,7 +86,7 @@ log_reg <- as.data.frame(sqldf("select distinct conc.patient_num
                                     on conc.patient_num = demo.patient_num
                                     left outer join (
                                             select patient_num
-                                                ,MIN(start_date)
+                                                ,MIN(start_date) as first_date
                                                 ,encounter_loc
                                             from enc_loc
                                             group by patient_num) as enc
@@ -104,6 +104,18 @@ library(dplyr)
 log_reg_full <- log_reg_full %>% group_by(patient_num) %>% summarise_all(funs(max))
 #log_reg_full now has one row per person.
 
+#join in earliest encounter date per row
+enc_loc$start_date <- ymd_hm(enc_loc$start_date)
+enc_loc$start_date <- floor_date(enc_loc$start_date, "day")
+results$start_date <- ymd_hm(results$start_date)
+results$start_date <- floor_date(results$start_date, "day")
+log_reg_full <-sqldf("select x.*
+                            ,MIN(y.start_date) as start_date
+                     from log_reg_full as x
+                     inner join enc_loc as y
+                     on x.patient_num = y.patient_num
+                     group by x.patient_num")
+
 ###################
 ###   RESULTS   ###
 ###################
@@ -119,13 +131,29 @@ results <- subset(results, subset = (results$valtype != '@'))
 # when eval = ImPACT: use tval (will need to convert text to integer...)
 
 #First, start by parsing out results into descriptive categorical variable
-results_subset <- sqldf("select log.patient_num
+
+#inner join results table to log_reg_full on patient_num and start_date
+
+subset_res <- sqldf("select res.*
+                    from results as res
+                    inner join log_reg_full as log
+                    on res.patient_num = log.patient_num
+                    AND res.start_date = log.start_date") 
+#remove duplicate rows
+subset_res <- subset(subset_res, subset = (subset_res$variable != '002- #95014789 Composite Score:'))
+
+#write.csv(subset_res, file = 'result_subset.csv')
+
+# TODO: Continue adding categories. START WITH SYMPTOMS
+#casting variable paths to an exploded view of 'result type'
+results_xpld <- sqldf("select log.patient_num
                         ,res.encounter_num
                         ,res.start_date
                         ,res.tval
                         ,res.nval
                         ,CASE 
                             WHEN variable_path LIKE '%IMPACT COMPOSITE SCORE%' THEN 'IMPACT_COMPOSITE_SCORE'
+                            WHEN variable_path LIKE '%IMPACT COMMENT%' THEN 'IMPACT_COMMENT'
                             WHEN variable_path LIKE '%CONCUSSION IMPACT IMPULSE CONTRO%' THEN 'IMPACT_IMPULSE_CONTROL'
                             WHEN variable_path LIKE '%CONCUSSION IMPACT MEMORY COMPOSI%' THEN 'IMPACT_MEMORY_COMPOSITE'
                             WHEN variable_path LIKE '%CONCUSSION IMPACT REACTION TIME%' THEN 'IMPACT_REACTION_TIME'
@@ -133,11 +161,16 @@ results_subset <- sqldf("select log.patient_num
                             WHEN variable_path LIKE '%CONCUSSION IMPACT VISUAL MOTOR%' THEN 'IMPACT_VISUAL_MOTOR'
                             WHEN variable_path LIKE '%ROW BALANCE ERRORS TOTAL%' THEN 'CONCUSSION_SCORE_TOTAL_BALANCE_ERRORS'
                             WHEN variable_path LIKE '%ROW CONCENTRATION SCORE%' THEN 'CONCUSSION_SCORE_CONCENTRATION_TOTAL'
-                            WHEN variable_path LIKE '%ROW DELAYED RECALL SCORE%' THEN 'CONCUSSIO_SCORE_DELAYED_RECALL'
+                            WHEN variable_path LIKE '%ROW DELAYED RECALL SCORE%' THEN 'CONCUSSION_SCORE_DELAYED_RECALL'
                             WHEN variable_path LIKE '%ROW IMMEDIATE MEMORY SCORE%' THEN 'CONCUSSION_SCORE_IMMEDIATE_MEMORY'
                             WHEN variable_path LIKE '%ROW TOTAL COGNITION SCORE%' THEN 'CONCUSSION_SCORE_TOTAL_COGNITION'
+                            WHEN variable_path LIKE '%DELAYED RECALL  SCORE%' THEN 'CONCUSSION_SCORE_DELAYED_RECALL'
+                            WHEN variable_path LIKE '%SYMPTOM CHECKLIST TOTAL NUMBER OF%' THEN 'CONCUSSION_SYMPTOMS_TOTAL_NUMBER'
+                            WHEN variable_path LIKE '%SYMPTOM CHECKLIST TOTAL SCORE%' THEN 'CONCUSSION_SYMPTOMS_TOTAL_SCORE'
                         ELSE 0
                         END result_test
-                        FROM results as res
+                        FROM subset_res as res
                         INNER JOIN log_reg_full as log
                         ON res.patient_num = log.patient_num")
+ 
+
