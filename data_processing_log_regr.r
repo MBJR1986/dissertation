@@ -218,4 +218,21 @@ res_final$IMPACT_VISUAL_MOTOR <- as.numeric(res_final$IMPACT_VISUAL_MOTOR)
 
 
 #Join res_final back into log_reg_full table
-
+log_reg_full <- sqldf("select x.*
+                      ,y.IMPACT_MEMORY_COMPOSITE
+                      ,y.IMPACT_COMMENT
+                      ,y.IMPACT_IMPULSE_CONTROL
+                      ,y.IMPACT_REACTION_TIME
+                      ,y.IMPACT_TOTAL_SYMPTOM
+                      ,y.IMPACT_VISUAL_MOTOR
+                      ,y.CONCUSSION_SCORE_TOTAL_BALANCE_ERRORS
+                      ,y.CONCUSSION_SCORE_CONCENTRATION_TOTAL
+                      ,y.CONCUSSION_SCORE_DELAYED_RECALL
+                      ,y.CONCUSSION_SCORE_IMMEDIATE_MEMORY
+                      ,y.CONCUSSION_SCORE_TOTAL_COGNITION
+                      ,y.CONCUSSION_SYMPTOMS_TOTAL_NUMBER
+                      ,y.CONCUSSION_SYMPTOMS_TOTAL_SCORE
+                      FROM log_reg_full as x
+                      left outer join res_final as y
+                      ON x.patient_num = y.patient_num
+                      order by x.patient_num")
