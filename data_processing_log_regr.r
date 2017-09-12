@@ -145,6 +145,7 @@ subset_res <- subset(subset_res, subset = (subset_res$variable != '002- #9501478
 #write.csv(subset_res, file = 'result_subset.csv')
 
 # TODO: Continue adding categories. START WITH SYMPTOMS
+# Interesting and may need to look into this, but there were no patient_nums with symptoms...just total score.
 #casting variable paths to an exploded view of 'result type'
 results_xpld <- sqldf("select log.patient_num
                         ,res.encounter_num
@@ -152,7 +153,6 @@ results_xpld <- sqldf("select log.patient_num
                         ,res.tval
                         ,res.nval
                         ,CASE 
-                            WHEN variable_path LIKE '%IMPACT COMPOSITE SCORE%' THEN 'IMPACT_COMPOSITE_SCORE'
                             WHEN variable_path LIKE '%IMPACT COMMENT%' THEN 'IMPACT_COMMENT'
                             WHEN variable_path LIKE '%CONCUSSION IMPACT IMPULSE CONTRO%' THEN 'IMPACT_IMPULSE_CONTROL'
                             WHEN variable_path LIKE '%CONCUSSION IMPACT MEMORY COMPOSI%' THEN 'IMPACT_MEMORY_COMPOSITE'
@@ -172,5 +172,7 @@ results_xpld <- sqldf("select log.patient_num
                         FROM subset_res as res
                         INNER JOIN log_reg_full as log
                         ON res.patient_num = log.patient_num")
- 
+ #convert result_test to factor
+results_xpld$result_test<- as.factor(results_xpld$result_test)
 
+summary(results_xpld)
