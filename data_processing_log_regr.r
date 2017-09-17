@@ -240,31 +240,52 @@ log_reg_full <- sqldf("select x.*
                       ON x.patient_num = y.patient_num
                       order by x.patient_num",method = "name__class") #TODO: start_date keeps getting converted to integer here
 
-#########################################################
-### TODO: convert log_reg_full$start_date to date
-#### TODO: convert notes$start_date to date
+#write out file for logistic regression analysis
+#write.csv(log_reg_full, "logistic_regression_data_cleaned.csv")
+
+
+###############
 ### NOTES   ###
 ###############
+#TODO: Really need to look at these and make sure they are matching up... ptnum 1060 should be included in both and aren't
+#   -person in concussion_dx, and definitely has notes...
+
+
 notes$start_date <- as.Date(notes$start_date, "%m/%d/%y %H:%M") #convert to date for join
-notes_patient <- as.data.frame(unique(notes$patient_num)) #generate list of unique patient_num
+notes_patient <- unique(as.character(notes$patient_num)) #generate list of unique patient_num
 #join in start_date from log_reg_full to verify start vs injury date (manual review)
-#notes_conc <- inner_join(notes, log_reg_full, by = c("patient_num" = "patient_num", "start_date" = "START_DATE"))
-notes_eval <- sqldf("select  x.*
-                    ,x.start_date as eval_date__Date
-                    from notes as x
-                    inner join log_reg_full
-                    on x.patient_num = log_reg_full.patient_num
-                    AND x.start_date = log_reg_full.START_DATE", method = "name__class")
+
+min_note_table<- data.frame(matrix(nrow=0, ncol=7)) #create main result table (all fired alerts)
+cnames<- c("patient_num", "encounter_num", "start_date", "code_label", "variable", "variable_index", "tval")
+colnames(min_note_table)<-cnames
+
+#for loop to extract rows == min date per person
+for (i in 1:length(notes_patient)) {
+  pt_id <- as.factor(as.character(notes_patient[i]))
+  print(pt_id)
+  pt_notes <- notes[as.character(notes[,"patient_num"])==pt_id,]
+  min <- as.Date(min(pt_notes$start_date))
+  min_notes <- as.data.frame(subset(pt_notes, subset = (pt_notes$start_date == min)))
+  min_note_table <- merge(min_note_table, min_notes, all = TRUE)
+}
+
+
 #write out notes_eval for manual chart review for dates
-#write.csv(notes_eval, "notes_eval_date.csv")
+#write.csv(min_note_table, "notes_eval_date.csv")
 
 #Discharge notes
-notes_dc <- sqldf("select x.*
-                  ,x.START_DATE as dc_date__Date
-                  from notes as x
-                  inner join concussion_dx as c
-                  on x.patient_num = c.patient_num
-                  AND x.start_date = c.dc_date", method = "name__class")
-notes_dc <- unique(notes_dc)
+max_note_table<- data.frame(matrix(nrow=0, ncol=7)) #create main result table (all fired alerts)
+cnames<- c("patient_num", "encounter_num", "start_date", "code_label", "variable", "variable_index", "tval")
+colnames(max_note_table)<-cnames
+
+#for loop to extract rows == min date per person
+for (i in 1:length(notes_patient)) {
+  pt_id <- as.factor(as.character(notes_patient[i]))
+  print(pt_id)
+  pt_notes <- notes[as.character(notes[,"patient_num"])==pt_id,]
+  max <- as.Date(max(pt_notes$start_date))
+  max_notes <- as.data.frame(subset(pt_notes, subset = (pt_notes$start_date == max)))
+  max_note_table <- merge(max_note_table, max_notes, all = TRUE)
+}
 #write out file
-#write.csv(notes_dc, "notes_dc_date.csv")
+#write.csv(max_note_table, "notes_dc_date.csv")
