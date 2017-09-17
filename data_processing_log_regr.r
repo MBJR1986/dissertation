@@ -50,6 +50,8 @@ colnames(concussion_dx) = c("patient_num", "encounter_num", "start_date", "varia
 
 #date difference between eval and dc to represent length of treatment/recovery in DAYS (unit)
 concussion_dx$LOR <- as.numeric(difftime(concussion_dx$dc_date, concussion_dx$eval_date, units = "days"))
+#convert concussion_dx$dc_date to date
+concussion_dx$dc_date <- as.Date(concussion_dx$dc_date, "%m/%d/%y %H:%M")
 
 #####################
 # historical dxs    #
@@ -106,10 +108,10 @@ log_reg_full <- log_reg_full %>% group_by(patient_num) %>% summarise_all(funs(ma
 #log_reg_full now has one row per person.
 
 #join in earliest encounter date per row
-enc_loc$start_date <- ymd_hm(enc_loc$start_date)
-enc_loc$start_date <- floor_date(enc_loc$start_date, "day")
-results$start_date <- ymd_hm(results$start_date)
-results$start_date <- floor_date(results$start_date, "day")
+enc_loc$start_date <- as.Date(enc_loc$start_date, "%m/%d/%y %H:%M")
+#enc_loc$start_date <- floor_date(enc_loc$start_date, "day")
+results$start_date <- as.Date(results$start_date, "%m/%d/%y %H:%M")
+#results$start_date <- floor_date(results$start_date, "day")
 log_reg_full <-sqldf("select x.*
                             ,MIN(y.start_date) as start_date
                      from log_reg_full as x
@@ -219,6 +221,7 @@ res_final$IMPACT_VISUAL_MOTOR <- as.numeric(res_final$IMPACT_VISUAL_MOTOR)
 
 #Join res_final back into log_reg_full table
 log_reg_full <- sqldf("select x.*
+                      ,x.start_date as eval_date__Date
                       ,y.IMPACT_MEMORY_COMPOSITE
                       ,y.IMPACT_COMMENT
                       ,y.IMPACT_IMPULSE_CONTROL
@@ -235,4 +238,33 @@ log_reg_full <- sqldf("select x.*
                       FROM log_reg_full as x
                       left outer join res_final as y
                       ON x.patient_num = y.patient_num
-                      order by x.patient_num")
+                      order by x.patient_num",method = "name__class") #TODO: start_date keeps getting converted to integer here
+
+#########################################################
+### TODO: convert log_reg_full$start_date to date
+#### TODO: convert notes$start_date to date
+### NOTES   ###
+###############
+notes$start_date <- as.Date(notes$start_date, "%m/%d/%y %H:%M") #convert to date for join
+notes_patient <- as.data.frame(unique(notes$patient_num)) #generate list of unique patient_num
+#join in start_date from log_reg_full to verify start vs injury date (manual review)
+#notes_conc <- inner_join(notes, log_reg_full, by = c("patient_num" = "patient_num", "start_date" = "START_DATE"))
+notes_eval <- sqldf("select  x.*
+                    ,x.start_date as eval_date__Date
+                    from notes as x
+                    inner join log_reg_full
+                    on x.patient_num = log_reg_full.patient_num
+                    AND x.start_date = log_reg_full.START_DATE", method = "name__class")
+#write out notes_eval for manual chart review for dates
+#write.csv(notes_eval, "notes_eval_date.csv")
+
+#Discharge notes
+notes_dc <- sqldf("select x.*
+                  ,x.START_DATE as dc_date__Date
+                  from notes as x
+                  inner join concussion_dx as c
+                  on x.patient_num = c.patient_num
+                  AND x.start_date = c.dc_date", method = "name__class")
+notes_dc <- unique(notes_dc)
+#write out file
+#write.csv(notes_dc, "notes_dc_date.csv")
