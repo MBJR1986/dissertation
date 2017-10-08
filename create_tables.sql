@@ -189,7 +189,8 @@ SELECT DISTINCT *
 FROM (
         SELECT x.patient_num
             ,x.encounter_num
-            ,x.start_date
+            ,x.start_date as note_date
+			,MIN(y.start_date) as conc_dx_date
             ,x.code_label
             ,x.variable
             ,x.variable_index
@@ -204,6 +205,7 @@ FROM (
         AND x.tval IS NOT NULL
         AND x.tval != '  '
 		AND x.tval != '@'
+		group by x.patient_num, x.encounter_num, note_date, x.code_label, x.variable, x.variable_index, x.tval
         order by x.patient_num, x.start_date
 )as tmp
 ;
