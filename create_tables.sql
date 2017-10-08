@@ -1,3 +1,5 @@
+--Author: Mark Burghart
+
 -- SQLite file for creating several tables in dissertation database
 -- Tables to create include:
 --      -Conditions (historical) --DONE
@@ -6,7 +8,16 @@
 --      -Results (concussion only) --DONE
 --      -Demographics --DONE (But subset from concussion_dx patient_nums)
 --      -Text notes --DONE
---      -Procedures (pt/ot/st,etc)
+--      -Procedures (pt/ot/st,etc) --DONE
+
+
+--Edits:
+--		1. 2017-10-08: After beginning manual note reviews, I see a need to adjust the cohort (potentially).
+--			Prior to doing this, I want to review ALL notes from a person's history that may be around a concussion date.
+--			Doing so will allow me to see visit progression within a episode of care (ed -> clinic, etc). Well, hopefully...
+--			To do this, I need to re-join the text notes table with the patient_num, not the encounter_num. Changes have been made.
+
+
 
 -- Rename 'data' table to change variable types to dates/integer
 ALTER TABLE 'Mark_dissertation_20170718-data' RENAME TO tmp;
@@ -169,6 +180,8 @@ order by patient_num, encounter_num, start_date
 -- from a person's concussion visits. I'll need to innerjoin all notes found
 -- with the encounter_nums from concussion_dx;
 
+-- Edit: not inner joining with patient_num, to show visit progression across settings. 
+
 DROP TABLE IF EXISTS text_notes;
 
 CREATE TABLE text_notes as 
@@ -184,13 +197,14 @@ FROM (
         FROM master_long as x
         INNER JOIN concussion_dx as y
         ON x.patient_num = y.patient_num 
-        AND x.encounter_num = y.encounter_num
+        --AND x.encounter_num = y.encounter_num
         WHERE x.valtype = 'T'
-        AND x.code_label IN ('Ambulatory Procedure Notes (17)', 'Ambulatory                       Progress Notes (15)', 'Care Plan (600008)',                             'Discharge Summaries (5)', 'ED Notes (6)',                              'Progress Notes (1)')
+        AND x.code_label IN ('Ambulatory Procedure Notes (17)', 'Ambulatory Progress Notes (15)', 'Care Plan (600008)', 'Discharge Summaries (5)', 'ED Notes (6)', 'Progress Notes (1)')
         AND x.variable_index != 265
         AND x.tval IS NOT NULL
         AND x.tval != '  '
-        order by x.patient_num, x.encounter_num, x.start_date
+		AND x.tval != '@'
+        order by x.patient_num, x.start_date
 )as tmp
 ;
 
