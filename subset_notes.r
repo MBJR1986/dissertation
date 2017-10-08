@@ -20,5 +20,8 @@ notes <- subset(notes, subset = (tval != '@'))
 notes$counter <- notes$note_date - notes$conc_dx_date #create counter comparing difference of dates between dx and note
 notes <- subset(notes, subset = (notes$counter >= 0)) #populate if counter is positive, meaning occurs after dx!
 
+#order by patient_num, note_date
+notes <-notes[with(notes,order(patient_num,note_date)),]
+
 #write out file
 write.csv(notes,'text_notes_subset.csv')
