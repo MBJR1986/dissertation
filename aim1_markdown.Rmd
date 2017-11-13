@@ -1,0 +1,91 @@
+---
+title: "Burghart Dissertation: Aim 1 code"
+author: "Mark Burghart"
+date: "November 12, 2017"
+output: html_document
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##**Aim 1.a:**
+##Assess Injury date vs Evaluation date
+
+Assumptions can be made that an individual will reach out to a healthcare provider soon after a concussion, but this assumption hasn't been thoroughly tested or reported. With this aim, I manually reviewed all the text-based evaluation notes from the Concussion Clinic at KUMC. After review, I was able to find and document 136 individual injury dates and assess the difference between this date and the date of evaluation for a concussion. 
+
+```{r, echo = FALSE, message=FALSE}
+library(lubridate)
+library(sqldf)
+
+setwd("C:/Users/MB047320/OneDrive - Cerner Corporation/KUMC/Dissertation/data/Mark_dissertation_20170718/")
+data <- read.csv("cc_text_notes.csv")
+#convert to dates
+data$conc_dx_date <-as.Date(mdy(data$conc_dx_date))
+data$note_date <- as.Date(mdy(data$note_date))
+data$injury_date <- as.Date(mdy(data$injury_date))
+data$last_visit_date <- as.Date(mdy(data$last_visit_date))
+```
+```{r}
+#create dataframe with 1 row per person with min/max dates
+aim1_df <- sqldf("select distinct patient_num
+                 ,MIN(note_date) as first_visit_date__Date
+                 ,MIN(injury_date) as injury_date__Date
+                  ,MAX(last_visit_date) as last_visit_date__Date
+                 from data
+                 group by patient_num", method = "name__class")
+```
+The resulting dataset looks like:
+```{r}
+head(aim1_df)
+```
+
+At this point, I need to generate a new variable *'wait_days'*, which represents the amount of time between a person's documented injury date and their date of evaluation at the concussion clinic.
+
+```{r}
+aim1_df$wait_days <- as.numeric(aim1_df$first_visit_date - aim1_df$injury_date)
+#Descriptive statistics:
+summary(aim1_df)
+```
+The distribution of wait times appears to be heavily skewed to lesser days of wait, although some longer waits were noted.
+```{r, echo=FALSE, message = FALSE}
+#barplot
+library(ggplot2)
+wait_hist = ggplot(data = aim1_df, aes(x = wait_days)) # data & aesthetics
+wait_hist + geom_histogram() # add histogram
+```
+
+##Discussion
+
+For aim 1.a, I wanted to look at the difference in injury date vs. evaluation date for each person. *On average, nearly 17 days* passed between injury date and evaluation date. This data was skewed to outliers on the high end, as the *median was 6 days wait*. Range = 0 days to 132 days. That being said, I think it would be **the best choice to use the date of evaluation, as opposed to injury date for the work moving forward**, as this event is clearly documented and referenced. I was able to verify the injury date in roughly 1/3rd of the encounters at the concussion clinic.
+
+
+## **Aim 1.b:**
+# Does last visit indicate discharge from clinic?
+
+
+The was little stastical analysis for this aim, as this entailed manual note review. Generally speaking, there were few formal discharges. From the reviewed notes, the common discharge procedure was *'patient will follow up if there are any concerns'* which makes sense clinically, but from a data perspective, I can't verify a discretely recorded event for when the person returns to their previous level of functioning. The assumption that an individual will discontinue services when no longer symptomatic will remain, as I cannot verify this event.
+
+Moving forward, *Length of Treatment (LOT)* should and will replace my original plan of trying to determine a person's length of *recovery* by stating that a person will be seen close to their injury date, and will be discharged from services when they have returned back to normal. I can determine the length of treatment time from my data, and I will plan on analyzing this as my main outcome of interest.
+
+#Distribution of length of treatment (n = 136):
+
+```{r, echo=FALSE, message = FALSE}
+aim1_df$LOT <- as.numeric(aim1_df$last_visit_date - aim1_df$first_visit_date)
+summary(aim1_df$LOT)
+
+lot_hist = ggplot(data = aim1_df, aes(x = LOT))+
+  geom_histogram()
+lot_hist
+```
+
+Number of patients evaluated by date:
+
+```{r, echo=FALSE, message = FALSE}
+dc_hist = ggplot(data = aim1_df, aes(x = last_visit_date))+
+  geom_histogram()+
+  scale_x_date(date_breaks = "6 months", date_minor_breaks = "1 month", date_labels = "%b %y")
+dc_hist
+```
+
