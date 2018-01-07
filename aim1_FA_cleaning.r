@@ -222,30 +222,114 @@ age_dist + xlab("Age (yrs)") +
 
 
 
+###################
+###   RESULTS   ###
+###################
+# Parse out results by person, type, and value (by person). Ideally, I will need to take the earliest 
+# value per person, to represent the evaluation results...
+
+#subset by patient_num in sports_med
+results <- sqldf("select distinct * from (
+                select x.*
+                 from results as x
+                 inner join sports_med as y
+                 on x.patient_num = y.patient_num) as tmp")
+
+#parse out results that have '@' for valtype variable, as there is no values for rows.
+results <- subset(results, subset = (results$valtype != '@'))
+
+#valtype is going to be confusing...
+# when eval = concussion score / symptoms: use nval variable
+# when eval = ImPACT: use tval (will need to convert text to integer...
+
+#First, start by parsing out results into descriptive categorical variable
+#convert results$start_date & log_reg_full$start_date to date:
+results$start_date <- as.Date(mdy_hm(results$start_date))
+#remove duplicate rows
+results <- subset(results, subset = (results$variable != '002- #95014789 Composite Score:'))
+
+#casting variable paths to an exploded view of 'result type'
+results_xpld <- sqldf("select log.patient_num
+                      ,res.encounter_num
+                      ,res.start_date
+                      ,res.tval
+                      ,res.nval
+                      ,CASE 
+                      WHEN variable_path LIKE '%IMPACT COMMENT%' THEN 'IMPACT_COMMENT'
+                      WHEN variable_path LIKE '%CONCUSSION IMPACT IMPULSE CONTRO%' THEN 'IMPACT_IMPULSE_CONTROL'
+                      WHEN variable LIKE '%Memory Composite (Verbal)%' THEN 'IMPACT_VERBAL_MEMORY'
+                      WHEN variable LIKE '%Memory Composite (Visual)%' THEN 'IMPACT_VISUAL_MEMORY'
+                      WHEN variable_path LIKE '%CONCUSSION IMPACT REACTION TIME%' THEN 'IMPACT_REACTION_TIME'
+                      WHEN variable_path LIKE '%CONCUSSION IMPACT TOTAL SYMPTOM%' THEN 'IMPACT_TOTAL_SYMPTOM'
+                      WHEN variable_path LIKE '%CONCUSSION IMPACT VISUAL MOTOR%' THEN 'IMPACT_VISUAL_MOTOR'
+                      WHEN variable_path LIKE '%ROW BALANCE ERRORS TOTAL%' THEN 'CONCUSSION_SCORE_TOTAL_BALANCE_ERRORS'
+                      WHEN variable_path LIKE '%ROW CONCENTRATION SCORE%' THEN 'CONCUSSION_SCORE_CONCENTRATION_TOTAL'
+                      WHEN variable_path LIKE '%ROW DELAYED RECALL SCORE%' THEN 'CONCUSSION_SCORE_DELAYED_RECALL'
+                      WHEN variable_path LIKE '%ROW IMMEDIATE MEMORY SCORE%' THEN 'CONCUSSION_SCORE_IMMEDIATE_MEMORY'
+                      WHEN variable_path LIKE '%ROW TOTAL COGNITION SCORE%' THEN 'CONCUSSION_SCORE_TOTAL_COGNITION'
+                      WHEN variable_path LIKE '%DELAYED RECALL  SCORE%' THEN 'CONCUSSION_SCORE_DELAYED_RECALL'
+                      WHEN variable_path LIKE '%SYMPTOM CHECKLIST TOTAL NUMBER OF%' THEN 'CONCUSSION_SYMPTOMS_TOTAL_NUMBER'
+                      WHEN variable_path LIKE '%SYMPTOM CHECKLIST TOTAL SCORE%' THEN 'CONCUSSION_SYMPTOMS_TOTAL_SCORE'
+                      ELSE 0
+                      END result_test
+                      FROM results as res
+                      INNER JOIN sports_med as log
+                      ON res.patient_num = log.patient_num")
+#results_xpld lengthens dataframe into longer form, but less columns. Creates result_test as a factor
+#convert result_test to factor
+results_xpld$result_test<- as.factor(results_xpld$result_test)
+results_xpld$tval <- as.character(results_xpld$tval)
+results_xpld$nval <- as.numeric(results_xpld$nval)
+
+#reshape result_test column into multiple columns and display result
+res_final <- sqldf("select patient_num
+                   ,encounter_num
+                   ,start_date
+                   ,MAX(CASE WHEN result_test = 'IMPACT_VERBAL_MEMORY' THEN tval end) as impact_verbal_memory
+                    ,MAX(CASE WHEN result_test = 'IMPACT_VISUAL_MEMORY' THEN tval end) as impact_visual_memory
+                   ,MAX(CASE WHEN result_test = 'IMPACT_COMMENT' THEN tval end) as impact_comment
+                   ,MAX(CASE WHEN result_test = 'IMPACT_IMPULSE_CONTROL' THEN tval end) as impact_impulse_control
+                   ,MAX(CASE WHEN result_test = 'IMPACT_REACTION_TIME' THEN tval end) as impact_reaction_time
+                   ,MAX(CASE WHEN result_test = 'IMPACT_TOTAL_SYMPTOM' THEN tval end) as impact_total_symptom
+                   ,MAX(CASE WHEN result_test = 'IMPACT_VISUAL_MOTOR' THEN tval end) as impact_visual_motor
+                   ,MAX(CASE WHEN result_test = 'CONCUSSION_SYMPTOMS_TOTAL_NUMBER' THEN nval end) as concussion_symptoms_total_count
+                   ,MAX(CASE WHEN result_test = 'CONCUSSION_SYMPTOMS_TOTAL_SCORE' THEN nval end) as concussion_symptoms_total_severity
+                   FROM results_xpld
+                   group by patient_num
+                   order by patient_num") #have to use max function to populate columns for some reason
+
+###Need to clean up some columns in res_final before loading into df_fa
+#IMPACT VERBAL MEMORY COMPOSITE
+res_final$impact_verbal_memory <- substr(res_final$impact_verbal_memory, 0, 2) #slice at two digits
+res_final$impact_verbal_memory <- gsub("<", "", paste(res_final$impact_verbal_memory)) #remove < symbol
+res_final$impact_verbal_memory <- as.numeric(res_final$impact_verbal_memory, na.rm = TRUE) #convert to number, with NAs
+
+#IMPACT VISUAL MEMORY COMPOSITE
+res_final$impact_visual_memory <- substr(res_final$impact_visual_memory, 0, 2) #slice at two digits
+res_final$impact_visual_memory <- gsub("<", "", paste(res_final$impact_visual_memory)) #remove < symbol
+res_final$impact_visual_memory <- as.numeric(res_final$impact_visual_memory, na.rm = TRUE) 
+
+#IMPACT COMMENT
+res_final$impact_comment <- as.numeric(gsub("CEI", "", paste(res_final$impact_comment)), na.rm = TRUE) #remove CEI, convert to int
+
+#IMPACT IMPULSE CONTROL
+res_final$impact_impulse_control <- as.numeric(res_final$impact_impulse_control, na.rm = TRUE)
+
+#IMPACT REACTION TIME
+res_final$impact_reaction_time[res_final$impact_reaction_time > 1.5] <- NA #chop values > 1.5
+res_final$impact_reaction_time <- substr(res_final$impact_reaction_time, 0, 4) #slice at 4 digits
+res_final$impact_reaction_time <- as.numeric(res_final$impact_reaction_time, na.rm = TRUE) 
+
+#IMPACT_VISUAL_MOTOR
+res_final$impact_visual_motor <- gsub("<", "", paste(res_final$impact_visual_motor))
+res_final$impact_visual_motor <- as.numeric(res_final$impact_visual_motor, na.rm = TRUE)
+
+#ImPact total symptom to numeric
+res_final$impact_total_symptom <- as.numeric(res_final$impact_total_symptom)
+
 #########################
 ### Create DF for FA  ###
 #########################
-
-df_fa <- as.data.frame(sqldf("select distinct conc.patient_num
-                                        ,conc.length_of_treat
-                               ,demo.age
-                               ,demo.sex
-                               ,med.code_label as historical_condition
-                               ,demo.language
-                               ,demo.race
-                               ,demo.religion
-                               from sports_med as conc
-                               left outer join med_hx as med
-                               on conc.patient_num = med.patient_num
-                               left outer join demo 
-                               on conc.patient_num = demo.patient_num
-                               left outer join (
-                               ,MIN(start_date) as first_date
-                               ,encounter_loc
-                               from enc_loc
-                               group by patient_num) as enc
-                               on conc.patient_num = enc.patient_num
-                               order by conc.patient_num")) #some multiple rows per person, if multiple dxs... will control later.
 
 #create dummy vars/binning for df_fa (1 = TRUE, 0 = FALSE)
 #need to collapse several variables into dichotomous bins, or counts (i.e. historical diagnoses)
@@ -277,4 +361,120 @@ med_hx_count <- sqldf('select distinct patient_num
                       from med_hx_temp
                       where code_label != "Concussion"
                       group by patient_num') #Final DF, count represent all dxs NOT INCLUDING concussion
+
+
+
+
+
+#Create One Master Dataframe from all objects for analysis
+df_fa <- as.data.frame(sqldf("select distinct conc.patient_num
+                              ,conc.length_of_treat
+                             ,demo.age
+                             ,demo.sex_male
+                             ,demo.race_white
+                             ,demo.religious
+                              ,MAX(med.concussion_hxdx) as concussion_hxdx
+                              ,MAX(med_hx.historical_dx_count) as historical_dx_count
+                              ,res.impact_verbal_memory
+                              ,res.impact_visual_memory
+                              ,res.impact_comment
+                              ,res.impact_impulse_control
+                              ,res.impact_reaction_time
+                              ,res.impact_total_symptom
+                              ,res.impact_visual_motor
+                              ,res.concussion_symptoms_total_count
+                              ,res.concussion_symptoms_total_severity
+                             from sports_med as conc
+                             left outer join med_hx as med
+                             on conc.patient_num = med.patient_num
+                             left outer join demo 
+                             on conc.patient_num = demo.patient_num
+                              left outer join med_hx_count as med_hx
+                              on conc.patient_num = med_hx.patient_num
+                              left outer join res_final as res
+                              on conc.patient_num = res.patient_num
+                              group by conc.patient_num
+                             order by conc.patient_num")) #some multiple rows per person, if multiple dxs... will control later.
+
+#convert NAs to 0 when applicable for count variables 
+df_fa$concussion_hxdx[is.na(df_fa$concussion_hxdx)] <- 0 
+df_fa$historical_dx_count[is.na(df_fa$historical_dx_count)] <- 0
+
+
+
+
+#### IMPUTING MISSING DATA (testing)#############
+#Resolve missing data. Either remove patients, or impute? 
+#   - Best solution is to remove individuals without all variables
+#   - alternative could be imputation, but I would need to simulate and test this. Maybe do both? More power...
+#   Imputation shouldn't be done at this point. I think my only option is to move forward with 83 people with long recovery and full data
+
+#filter out rows with NAs
+df_fa_no_nas <- df_fa[complete.cases(df_fa), ] #312 rows, so have of population have full data... 80 people with long recovery. 148 in full dataset...
+#subset long recovery patients
+df_fa_no_nas_long <- subset(df_fa_no_nas, subset = (df_fa_no_nas$length_of_treat >= 28))
+
+#test correlation between impact symptoms and concussion scale to see if dropping is needed
+cor(df_fa_no_nas$impact_total_symptom, df_fa_no_nas$concussion_symptoms_total_severity) #0.83.. drop
+cor(df_fa_no_nas$impact_total_symptom, df_fa_no_nas$concussion_symptoms_total_count) #.35 meh...
+
+#drop concussion symptoms severity and total and see how many don't have NAs
+drops <- c("concussion_symptoms_total_count","concussion_symptoms_total_severity")
+df_fa_droppedcols <- df_fa[ , !(names(df_fa) %in% drops)]
+#filter out NAs
+df_fa_droppedcols_no_nas <- df_fa_droppedcols[complete.cases(df_fa_droppedcols), ]
+#long recovery
+df_fa_droppedcols_long <- subset(df_fa_droppedcols_no_nas, subset = (df_fa_droppedcols_no_nas$length_of_treat >= 28)) #83, lets use this as final df
+
+######OKAY LET's DO THIS##########
+#drop other columns not in analysis
+final_drop <- c("patient_num", "length_of_treat")
+final <- df_fa_droppedcols_long[ , !(names(df_fa_droppedcols_long) %in% final_drop)]
+
+
+
+###########################################
+##########  Factor Analysis ###############
+###########################################
+#standardized variables (rescaled to mean of 0 and SD of 1). Makes it easier for comparison across units.
+final_stan = as.data.frame(scale(final))
+
+#ss loadings in outputs = eigenvalues (i.e. variance in all variables which is accounted for by that factor. 
+#                         the eigenvalue/# of variables = proportion variance)
+# As a rule-of-thumb a factor is important if its eigenvalue is greater than 1 (i.e., the average); 
+#             (this is also referred to as the Kaiser Rule)
+
+library(psych)
+library(GPArotation)
+
+#parallel analysis for # of factors
+parallel <- fa.parallel(final_stan, fm = 'minres', fa = 'fa')
+#suggests 3
+
+threefactor <- fa(final_stan,nfactors = 3,rotate = "oblimin",fm="minres") #oblique rotation, as there appears to be some correlations
+print(threefactor)
+print(threefactor$loadings,cutoff = 0.3)#prints factors with a loading >= 0.3
+
+fa.diagram(threefactor) #plots loadings
+#interpretations: 
+#   RMSR = 0.06 (meh, want close 0)
+#     RMSEA index =  0.077 (good fit = < 0.05)
+#   Tucker Lewis Index of factoring reliability =  0.776 (want over 0.9)
+
+#Not great fit....
+
+
+#four factors
+fourfactor <- fa(final_stan, nfactors = 4, rotate = "oblimin", fm="minres")
+print(fourfactor)
+print(fourfactor$loadings,cutoff = 0.3) #better fit, but still not great
+
+#polychoric correlation structure
+library(polycor)
+threefactor_pc <- hetcor(final_stan, ML = TRUE)
+fa_3factor_pc <- fa(r=threefactor_pc$correlations, nfactors=3, rotate="oblimin", fm = "minres")
+print(fa_3factor_pc)
+print(fa_3factor_pc$loadings,cutoff = 0.3)
+#Fit: RMSR = 0.06 (less than 0.08 is good fit)
+fa.diagram(fa_3factor_pc)
 
