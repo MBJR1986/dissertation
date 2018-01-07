@@ -38,7 +38,14 @@ notes_clean <- read.csv('cc_text_notes.csv', stringsAsFactors = FALSE) #concussi
 ################
 ### TODO    ####
 ################
+<<<<<<< HEAD
 # 1. Dummify demographic variables
+=======
+# 1. still need to figure out how I can control for people with multiple concussions... Can't treat them as same person.
+#   - Going to be some work... could always do manual (pass). But likely need to come up with some logic to state that if
+#       person doesn't come back to clinic within 3-6 months, but then comes in again for concussion, this is now a second concussion
+#       (or something else?). Doing this will likely need to be a for loop or function... going to take some time and thought.
+>>>>>>> 2f199f050ebdba4da11c97227038a6bd62806c16
 
 
 
@@ -115,8 +122,13 @@ sports_med <- sports_med[order(sports_med$patient_num,sports_med$start_date),]
 sports_med$visit_gap <- do.call(c,by(sports_med$start_date,sports_med$patient_num,function(x) c(NA,diff(x))))
 #convert NAs to 0 (i.e. Keep in dataframe)
 sports_med$visit_gap[is.na(sports_med$visit_gap)] <- 0
+<<<<<<< HEAD
 #create new variable (flag) to represent row where visit_gap >= 180 days (6 months)
 sports_med$flag <- ifelse(sports_med$visit_gap >= 180, 1, 0)
+=======
+#create new variable (flag) to represent row where visit_gap >= 100 days
+sports_med$flag <- ifelse(sports_med$visit_gap >= 100, 1, 0)
+>>>>>>> 2f199f050ebdba4da11c97227038a6bd62806c16
 
 #filter each person iteratively by the first occurence of the flag by rows (i.e. See flag, drop rest of rows per person)
 library(dplyr)
@@ -171,6 +183,7 @@ lot_dist + xlab("Length Of Treatment (days)") +
   ggtitle("Length of treatment for Concussion Clinic patients (outliers removed)")
 
 
+<<<<<<< HEAD
 #general summary of population breakdown: Count of patients with treatment >= 28 days: 148 (22%)
 #                                         Count of patients with treatment <= 28 days: 525 (78%)
 #                                         Count of patients with Tx >= 28 days and age >= 18: 47
@@ -477,4 +490,12 @@ print(fa_3factor_pc)
 print(fa_3factor_pc$loadings,cutoff = 0.3)
 #Fit: RMSR = 0.06 (less than 0.08 is good fit)
 fa.diagram(fa_3factor_pc)
+=======
+
+
+
+
+
+
+>>>>>>> 2f199f050ebdba4da11c97227038a6bd62806c16
 

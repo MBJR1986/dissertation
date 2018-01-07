@@ -28,7 +28,7 @@ notes_clean <- read.csv('cc_text_notes.csv', stringsAsFactors = FALSE) #concussi
 #####################
 
 #compare eval and injury dates from notes_clean assess difference between 2 dates by patient_num
-num_pts <- as.numeric(length(unique(notes_clean$patient_num))) #137
+num_pts <- as.numeric(length(unique(notes_clean$patient_num))) #136
 
 #convert to dates
 notes_clean$conc_dx_date <-as.Date(mdy(notes_clean$conc_dx_date))
@@ -55,7 +55,7 @@ library(ggplot2)
 wait_hist = ggplot(data = aim1_df, aes(x = wait_days)) # data & aesthetics
 wait_hist + geom_histogram() # add histogram
 
-# summary: For aim 1.a, I wanted to look at the difference in injury date vs. eval date. On average, nearly 18 days passed 
+# summary: For aim 1.a, I wanted to look at the difference in injury date vs. eval date. On average, nearly 17 days passed 
 # between injury date and evaluation date. This data was skewed to outliers on the high end, as the median was 6 days wait. 
 # Range = 0 days to 132 days. That being said, I think it would be the best choice to use the date of evaluation, as opposed to 
 # injury date for the work moving forward, as this event is clearly documented and referenced. I was able to verify the injury date in 
@@ -80,3 +80,7 @@ summary(aim1_df$LOT)
 lot_hist = ggplot(data = aim1_df, aes(x = LOT))+
   geom_histogram()
 lot_hist
+
+dc_hist = ggplot(data = aim1_df, aes(x = last_visit_date))+
+  geom_histogram()
+dc_hist

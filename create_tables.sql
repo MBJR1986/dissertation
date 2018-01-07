@@ -206,10 +206,27 @@ FROM (
         AND x.tval != '  '
 		AND x.tval != '@'
 		group by x.patient_num, x.encounter_num, note_date, x.code_label, x.variable, x.variable_index, x.tval
-        order by x.patient_num, x.start_date
+        order by x.patient_num, note_date
 )as tmp
 ;
+--convert note_date and conc_dx_date to date format
+ALTER TABLE text_notes RENAME TO tmp;
 
+CREATE TABLE text_notes (
+	patient_num INT
+	,encounter_num INT
+	,note_date DATETIME
+	,conc_dx_date DATETIME
+	,code_label TEXT
+	,variable TEXT
+	,variable_index NUM
+	,tval TEXT
+	);
+INSERT INTO text_notes(patient_num, encounter_num, note_date,conc_dx_date,code_label,variable,variable_index,tval)
+SELECT patient_num, encounter_num, note_date,conc_dx_date,code_label,variable,variable_index,tval
+from tmp
+order by patient_num, note_date;
+DROP TABLE tmp;
 ----------------------
 -- Procedures table --
 ----------------------
