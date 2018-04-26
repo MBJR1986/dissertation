@@ -7,20 +7,25 @@
 library(lubridate)
 library(sqldf)
 library(ggplot2)
+library(survival)
+library(ranger)
+library(ggfortify)
+
 
 #load data
-setwd("C:/Users/MB047320/OneDrive - Cerner Corporation/KUMC/Dissertation/data/Mark_dissertation_20170718/")
+setwd("D:/KUMC/Dissertation/data/Mark_dissertation_20170718/")
 master <- read.csv('master.csv', stringsAsFactors = FALSE)
 concussion_dx <- read.csv('concussion_dx_cohort.csv', stringsAsFactors = FALSE)
-demo <- read.csv('Mark_dissertation_20170718-patient.csv', stringsAsFactors = FALSE)
+demo <- read.csv('full_demographic.csv', stringsAsFactors = FALSE) #includes person-wise SVI data
 enc_loc <- read.csv('encounter_location.csv', stringsAsFactors = FALSE)
 med_hx <- read.csv('medical_history.csv', stringsAsFactors = FALSE)
 #results <- read.csv('results.csv', stringsAsFactors = FALSE)
 #notes <- read.csv('text_notes.csv', stringsAsFactors = FALSE)
 #notes_clean <- read.csv('cc_text_notes.csv', stringsAsFactors = FALSE) #concussion clinic notes, contains concussion dx date, and manual injury date
+svi <- read.csv('patient_svi_countylevel.csv', stringsAsFactors = FALSE) #SVI data with MRN info
 
 
-#Some general TODOs for data strucute in R's survival analysis:
+#Some general TODOs for data structure in R's survival analysis:
 #   - One row per person
 #   - Variables can be cont, dich, ordinal
 #   - Need to use 'LOT' variable as the time component
@@ -227,6 +232,10 @@ surv_df <- sqldf("select distinct * from (
                  ,demo.religious
                  ,demo.age
                  ,demo.race
+                ,demo.RPL_THEME1 as perc_rank_socioeconomic
+                ,demo.RPL_THEME2 as perc_rank_householdcomp
+                ,demo.RPL_THEME3 as perc_rank_minoritystatus
+                ,demo.RPL_THEME4 as perc_rank_housingtransport
                  ,MAX(mh.ADHD) as ADHD
                  ,MAX(mh.Anxiety) as Anxiety
                  ,MAX(mh.Concussion) as Concussion
@@ -256,15 +265,148 @@ surv_df$dc <- 1
 
 
 
-######################
-####  SVI Data    ####
-######################
-
-
-
-
 
 #########################
 ### Write DF to disk  ###
 #########################
-write.csv(surv_df, file = "survival_analysis_df.csv")
+#write.csv(surv_df, file = "survival_analysis_df.csv")
+
+
+
+
+#######################################
+### Kaplan Meier Survival Analysis  ###
+#######################################
+#665 cases used for analysis. Seen at concussion clinic, have all variables. for Binary variables (i.e. Religious? and English-speaking)
+# codes = '1' represent positive classification.
+
+
+#surv() to build survival object
+km <- with(surv_df, Surv(length_of_treat, dc))
+
+#fit survival probability estimates
+km_fit <- survfit(Surv(length_of_treat, dc)~1, data = surv_df)
+summary(km_fit, times = c(1,5,10,15,20*(1:10))) #prints estimates for 1,5,10 etc days, then every 20 after
+
+#plot all population survival curve (time = days)
+all_pop <- autoplot(km_fit, xlim = c(0, 200), xlab = "Length of Care (days)", ylab = "Survival Probability")
+all_pop + theme_minimal()
+
+#plot survival curve by sex
+km_sex_fit <- survfit(Surv(length_of_treat,dc) ~ sex, data = surv_df)
+sex_curve <- autoplot(km_sex_fit, xlim = c(0,200), xlab = "Length of Care (days)", ylab = "Survival Probability")
+sex_curve <- sex_curve + theme_bw()
+sex_curve <- sex_curve + scale_fill_discrete(name = "Sex", labels = c("Female", "Male"))
+sex_curve
+
+#todo: adjust colors. Otherwise looks good and can just delete second legend out of R
+
+#https://cran.r-project.org/web/packages/ggfortify/vignettes/plot_surv.html
+#survival plotting examples
+
+#plot concussion history (significant diff)
+km_conc_hist_fit <- survfit(Surv(length_of_treat,dc) ~ Concussion, data = surv_df)
+conc_hist_curve <- autoplot(km_conc_hist_fit, xlim= c(0,200), xlab = "Length of Care (days)", ylab = "Survival Probability")
+conc_hist_curve <- conc_hist_curve + theme_bw()
+conc_hist_curve <- conc_hist_curve + scale_fill_discrete(name = "Previous Concussion?", labels = c("No", "Yes"))
+conc_hist_curve
+
+######################
+### Log rank tests for differences in survival rates between groups
+######################
+
+#sex
+surv_diff_sex = survdiff(Surv(length_of_treat,dc)~sex, data = surv_df)
+surv_diff_sex
+#Interpretation: P-value less than 0.05 (0.0002) means significant diff. 
+
+#Race 
+surv_df$race_white <- ifelse(surv_df$race == "white", 1, 0) #white =1, minority = 0
+survdiff(Surv(length_of_treat,dc) ~race_white, data = surv_df)
+#p = 0.9
+
+
+#Prior Concussions
+surv_diff_conc <- survdiff(Surv(length_of_treat,dc)~Concussion, data = surv_df)
+surv_diff_conc
+# p = 0.02 ***
+
+#religious
+surv_diff_relig <- survdiff(Surv(length_of_treat,dc)~religious, data = surv_df)
+surv_diff_relig
+#nope. P = 0.9
+
+#English-speaking
+surv_diff_eng <- survdiff(Surv(length_of_treat,dc)~english_speaking, data = surv_df)
+surv_diff_eng
+#close: p-value = 0.1
+
+#ADHD
+surv_diff_adhd <- survdiff(Surv(length_of_treat,dc)~ADHD, data = surv_df)
+surv_diff_adhd
+#nope: p = 1
+
+#anxiety
+surv_diff_anx <- survdiff(Surv(length_of_treat,dc)~Anxiety, data = surv_df)
+surv_diff_anx
+# p = 0.3
+
+#Dyslexia
+surv_diff_dys <- survdiff(Surv(length_of_treat,dc)~Dyslexia, data = surv_df)
+surv_diff_dys
+#p = 0.2
+
+#Migraines
+survdiff(Surv(length_of_treat,dc)~Migraine, data = surv_df)
+#p = 0.8
+
+#depression
+survdiff(Surv(length_of_treat,dc)~Depression, data = surv_df)
+#p = 0.7
+
+#psychiatric illness (defined...?)
+survdiff(Surv(length_of_treat,dc)~Psychiatric_illness, data = surv_df)
+# p = 0.2
+
+
+
+##############################
+### Cox PH regression   ######
+##############################
+#univariate cox regression
+res.cox <- coxph(Surv(length_of_treat,dc)~ sex, data = surv_df)
+summary(res.cox)
+#interpret: With sex as covariate, this is significant (p = 0.0003). Beta coefficient indicates that females have higher risk of treatment
+#when compared to males. Hazards ratio give the effect size of covariate. Here, being female increases the hazard by a factor of 1.34.
+# note: interpretation here is inverse of traditional survival models. Here, we want shorter 'survival', which represent length of care.
+
+#mulitvariate cox regression
+cox <- coxph(Surv(length_of_treat, dc) ~ sex + english_speaking + religious + age + race_white + ADHD + Anxiety + Concussion +
+                 Depression + Dyslexia + Migraine + Psychiatric_illness + perc_rank_socioeconomic +
+                 perc_rank_householdcomp + perc_rank_minoritystatus + perc_rank_housingtransport, data = surv_df)
+summary(cox)
+#interpretation:
+# Significant model, as Likelihood ratio test, Wald test, and Logrank test are all significant p-values.
+# Here, sex and history of psychiatric illness significant, with several close to significance (P < .1)
+# p-value for sex had a hazard ratio of 1.36, indicating strong relationship to longer recoveries.
+#Concordance statistic isn't great, and neither is Rsquare... 
+
+#Socioeconominc had a hazard of 2.3, the highest hazard in variable list.
+
+#might need to consider removing some diagnoses. Psychiatric illness had one instance... likely need to get out of here. 
+
+#mulitvariate cox regression
+cox_v2 <- coxph(Surv(length_of_treat, dc) ~ sex + english_speaking + religious + age + race_white + ADHD + Anxiety + Concussion +
+                 Depression + Dyslexia + Migraine + perc_rank_socioeconomic +
+                 perc_rank_householdcomp + perc_rank_minoritystatus + perc_rank_housingtransport, data = surv_df)
+summary(cox_v2)
+
+#Interpret:
+# Still significant model, as Likelihood, Wald, and logrank tests were all highly signficant. Here, with psychiatric history
+# removed, sex was highly significant, along with history of concussion (p = .04). Several variable were close to significance (p < .10).
+# Hazard ratio: same for sex 1.36, indicating stronger relationship to long recoveries. SocioEconomic had a high rate as well, but
+#interpretation of the continuous variable I will need to think about. This might be representing that individuals with higher socio-
+#economic status have higher risk for longer recoveries. alternative: they may be more likely to seek out services.
+#concordance stat is pretty shitty...
+
+
